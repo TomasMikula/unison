@@ -18,7 +18,6 @@ import Unison.Reference (Reference)
 -- may not form part of their identity according to `Eq` / `Ord`.
 class (Show v, ABT.Var v) => Var v where
   typed :: Type -> v
-  retype :: Type -> v -> v
   name :: v -> Text
   freshenId :: Word64 -> v -> v
 

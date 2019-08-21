@@ -930,7 +930,6 @@ instance Var SymbolC where
   typed s = SymbolC False (Var.typed s)
   name (SymbolC _ s) = Var.name s
   retype t (SymbolC b s) = SymbolC b (Var.retype t s)
-  freshId (SymbolC _ s) = Var.freshId s
   freshenId n (SymbolC i s) = SymbolC i (Var.freshenId n s)
 
 instance (Show e, Show cont) => Show (Value e cont) where

@@ -22,7 +22,6 @@ instance ABT.Var Symbol where
 instance Var Symbol where
   typed t = Symbol 0 t
   retype t (Symbol id _) = Symbol id t
-  freshId (Symbol id _) = id
   freshenId id (Symbol _ n) = Symbol id n
   name (Symbol id t) = case t of
     Var.User n -> n <> showid id

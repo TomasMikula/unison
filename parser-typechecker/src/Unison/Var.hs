@@ -20,7 +20,6 @@ class (Show v, ABT.Var v) => Var v where
   typed :: Type -> v
   retype :: Type -> v -> v
   name :: v -> Text
-  freshId :: v -> Word64
   freshenId :: Word64 -> v -> v
 
 freshIn :: ABT.Var v => Set v -> v -> v

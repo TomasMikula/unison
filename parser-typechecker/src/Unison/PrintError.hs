@@ -410,43 +410,6 @@ renderTypeError e env src = case e of
       <> annotatedAsErrorSite src typeSite
     , "Make sure it's imported and spelled correctly."
     ]
-  UnknownTerm {..}
-    | Type.isArrow expectedType && Var.typeOf unknownTermV == Var.AskInfo
-    -> let Type.Arrow' i o = case expectedType of
-             Type.ForallsNamed' _ body -> body
-             _                         -> expectedType
-       in
-         mconcat
-           [ "Here's what I know about the expression at "
-           , annotatedToEnglish termSite
-           , ":\n\n"
-           , annotatedAsErrorSite src termSite
-           , "\n"
-           , "Its type is: "
-           , style ErrorSite (renderType' env i)
-           , ".\n\n"
-           , case o of
-             Type.Existential' _ _ ->
-               "It can be replaced with a value of any type.\n"
-             _ ->
-               "A well-typed replacement must conform to: "
-                 <> style Type2 (renderType' env o)
-                 <> ".\n"
-           ]
-  UnknownTerm {..} | Var.typeOf unknownTermV == Var.MissingResult -> mconcat
-    [ "I found a block that ends with a binding instead of an expression at "
-    , annotatedToEnglish termSite
-    , ":\n\n"
-    , annotatedAsErrorSite src termSite
-    , "\n"
-    , case expectedType of
-      Type.Existential' _ _ ->
-        "To complete the block, add an expression after this binding.\n\n"
-      _ ->
-        "Based on the context, I'm expecting an expression of type "
-          <> style Type1 (renderType' env expectedType)
-          <> " after this binding. \n\n"
-    ]
   UnknownTerm {..} ->
     let (correct, wrongTypes, wrongNames) =
           foldr sep id suggestions ([], [], [])
@@ -457,7 +420,7 @@ renderTypeError e env src = case e of
             C.WrongName -> (_3 %~ ((name, typ) :)) . r
     in  mconcat
           [ "I'm not sure what "
-          , style ErrorSite (Var.nameStr unknownTermV)
+          , style ErrorSite (Text.unpack unknownTermV)
           , " means at "
           , annotatedToEnglish termSite
           , "\n\n"
@@ -626,7 +589,7 @@ renderTypeError e env src = case e of
       [ "UnknownTerm: "
       , annotatedToEnglish loc
       , " "
-      , renderVar v
+      , fromString (Text.unpack v)
       , "\n\n"
       , annotatedAsErrorSite src loc
       , "Suggestions: "

@@ -68,7 +68,7 @@ data TypeError v loc
                 , typeSite     :: loc
                 , note         :: C.ErrorNote v loc
                 }
-  | UnknownTerm { unknownTermV :: v
+  | UnknownTerm { unknownTermV :: Text
                 , termSite     :: loc
                 , suggestions  :: [C.Suggestion v loc]
                 , expectedType :: C.Type v loc

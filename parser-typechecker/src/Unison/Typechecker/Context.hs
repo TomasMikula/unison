@@ -237,7 +237,7 @@ data Cause v loc
   = TypeMismatch (Context v loc)
   | IllFormedType (Context v loc)
   | UnknownSymbol loc v
-  | UnknownTerm loc v [Suggestion v loc] (Type v loc)
+  | UnknownTerm loc Text [Suggestion v loc] (Type v loc)
   | CompilerBug (CompilerBug v loc)
   | AbilityCheckFailure [Type v loc] [Type v loc] (Context v loc) -- ambient, requested
   | EffectConstructorWrongArgCount ExpectedArgCount ActualArgCount Reference ConstructorId

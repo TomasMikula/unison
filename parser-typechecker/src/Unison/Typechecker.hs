@@ -242,7 +242,7 @@ typeDirectedNameResolution oldNotes oldType env = do
   suggest = traverse_
     (\(Resolution name inferredType loc suggestions) ->
       typeError $ Context.ErrorNote
-        (Context.UnknownTerm loc (Var.named name) (dedupe suggestions) inferredType)
+        (Context.UnknownTerm loc name (dedupe suggestions) inferredType)
         []
     )
   guard x a = if x then Just a else Nothing

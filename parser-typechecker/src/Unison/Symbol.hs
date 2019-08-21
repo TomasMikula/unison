@@ -5,9 +5,11 @@ module Unison.Symbol where
 
 import Unison.Prelude
 
+import Data.Text (pack)
 import Unison.Var (Var(..))
 import qualified Data.Set as Set
 import qualified Unison.ABT as ABT
+import qualified Unison.Reference as R
 import qualified Unison.Var as Var
 
 data Symbol = Symbol !Word64 Var.Type deriving (Generic)
@@ -19,10 +21,28 @@ instance ABT.Var Symbol where
 
 instance Var Symbol where
   typed t = Symbol 0 t
-  typeOf (Symbol _ t) = t
   retype t (Symbol id _) = Symbol id t
   freshId (Symbol id _) = id
   freshenId id (Symbol _ n) = Symbol id n
+  name (Symbol id t) = case t of
+    Var.User n -> n <> showid id
+    Var.Inference Var.Ability -> "𝕖" <> showid id
+    Var.Inference Var.Input -> "𝕒" <> showid id
+    Var.Inference Var.Output -> "𝕣" <> showid id
+    Var.Inference Var.Other -> "𝕩" <> showid id
+    Var.Inference Var.PatternPureE -> "𝕞" <> showid id
+    Var.Inference Var.PatternPureV -> "𝕧" <> showid id
+    Var.Inference Var.PatternBindE -> "𝕞" <> showid id
+    Var.Inference Var.PatternBindV -> "𝕧" <> showid id
+    Var.Inference Var.TypeConstructor -> "𝕗" <> showid id
+    Var.Inference Var.TypeConstructorArg -> "𝕦" <> showid id
+    Var.RefNamed r -> "ℍ" <> R.toText r <> showid id
+    Var.MissingResult -> "_" <> showid id
+    Var.Blank -> "_" <> showid id
+    Var.UnnamedWatch k guid -> fromString k <> "." <> guid <> showid id
+    where
+    showid 0 = ""
+    showid n = pack (show n)
 
 instance Eq Symbol where
   Symbol id1 name1 == Symbol id2 name2 = id1 == id2 && name1 == name2

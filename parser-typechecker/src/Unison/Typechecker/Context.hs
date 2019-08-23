@@ -746,7 +746,7 @@ synthesize e = scope (InSynthesize e) $
     Nothing -> compilerCrash $ UndeclaredTermVariable v ctx
     Just t -> pure t
   go (Term.Blank' blank) = do
-    v <- freshenVar Var.blank
+    v <- freshenVar (Var.named "_")
     appendContext $ context [Existential blank v]
     pure $ Type.existential' l blank v -- forall (TypeVar.Universal v) (Type.universal v)
   go (Term.Ann' (Term.Ref' _) t) = case ABT.freeVars t of

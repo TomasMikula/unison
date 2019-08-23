@@ -179,6 +179,7 @@ pretty0 n AmbientContext { precedence = p, blockContext = bc, infixContext = ic,
     App' x (Constructor' DD.UnitRef 0) ->
       paren (p >= 11) $ (fmt S.DelayForceChar $ l "!") <> pretty0 n (ac 11 Normal im) x
     AskInfo' x -> paren (p >= 11) $ pretty0 n (ac 11 Normal im) x <> (fmt S.DelimiterChar $ l "?")
+    MissingResult' -> l "_"
     LamNamed' v x | (Var.name v) == "()" ->
       paren (p >= 11) $ (fmt S.DelayForceChar $ l "'") <> pretty0 n (ac 11 Normal im) x
     Sequence' xs -> PP.group $

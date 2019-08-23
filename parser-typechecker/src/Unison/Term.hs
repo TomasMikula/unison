@@ -96,6 +96,8 @@ data F typeVar typeAnn patternAnn a
   | Match a [MatchCase patternAnn a]
   -- Instruction to query the typechecker for the type of subexpressions
   | AskInfo a
+  -- Term created to finish a block that doesn't end with an expression
+  | MissingResult
   deriving (Foldable,Functor,Generic,Generic1,Traversable)
 
 type IsTop = Bool
@@ -255,6 +257,7 @@ extraMap vtf atf apf = \case
   Let x y z -> Let x y z
   Match tm l -> Match tm (map (matchCaseExtraMap apf) l)
   AskInfo x -> AskInfo x
+  MissingResult -> MissingResult
 
 matchCaseExtraMap :: (loc -> loc') -> MatchCase loc a -> MatchCase loc' a
 matchCaseExtraMap f (MatchCase p x y) = MatchCase (fmap f p) x y
@@ -442,6 +445,7 @@ pattern LetRecNamedAnnotated' ann bs e <- (unLetRecNamedAnnotated -> Just (_, an
 pattern LetRecNamedAnnotatedTop' top ann bs e <-
           (unLetRecNamedAnnotated -> Just (top, ann, bs,e))
 pattern AskInfo' arg <- (ABT.out -> ABT.Tm (AskInfo arg))
+pattern MissingResult' <- (ABT.out -> ABT.Tm MissingResult)
 
 fresh :: Var v => Term v -> v -> v
 fresh = ABT.fresh
@@ -769,6 +773,9 @@ unReqOrCtor _                         = Nothing
 askInfo :: Ord v => a -> AnnotatedTerm2 vt at ap v a -> AnnotatedTerm2 vt at ap v a
 askInfo a e = ABT.tm' a (AskInfo e)
 
+missingResult :: Ord v => a -> AnnotatedTerm2 vt at ap v a
+missingResult a = ABT.tm' a MissingResult
+
 -- Dependencies including referenced data and effect decls
 dependencies :: (Ord v, Ord vt) => AnnotatedTerm2 vt at ap v a -> Set Reference
 dependencies t = Set.map (LD.fold id Referent.toReference) (labeledDependencies t)
@@ -965,6 +972,7 @@ instance (ABT.Var vt, Eq at, Eq a) => Eq (F vt at p a) where
     binding == binding2 && body == body2
   Match scrutinee cases == Match s2 cs2 = scrutinee == s2 && cases == cs2
   AskInfo x == AskInfo y = x == y
+  MissingResult == MissingResult = True
   _ == _ = False
 
 
@@ -1014,6 +1022,7 @@ instance (Show v, Show a) => Show (F v a0 p a) where
     go p (Or x y) =
       showParen (p > 0) $ s "or " <> shows x <> s " " <> shows y
     go p (AskInfo x) = showParen (p > 9) $ s "? " <> showsPrec 10 x
+    go _ MissingResult = s "_"
     (<>) = (.)
     s    = showString
 

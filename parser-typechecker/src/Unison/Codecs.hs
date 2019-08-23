@@ -170,7 +170,8 @@ serializeTerm x = do
         incPosition
       Blank b -> error $ "cannot serialize program with blank " ++
                          fromMaybe ""  (Blank.nameb b)
-      AskInfo _ -> error  "cannot serialize program with AskInfo"
+      AskInfo _ -> error "cannot serialize program with AskInfo"
+      MissingResult -> error "cannot serialize program with MissingResult"
       Handle h body -> do
         hpos <- serializeTerm h
         bpos <- serializeTerm body

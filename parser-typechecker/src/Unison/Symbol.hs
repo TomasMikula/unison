@@ -25,7 +25,6 @@ instance Var Symbol where
   name (Symbol id t) = case t of
     Var.User n -> n <> showid id
     Var.RefNamed r -> "ℍ" <> R.toText r <> showid id
-    Var.UnnamedWatch k guid -> fromString k <> "." <> guid <> showid id
     where
     showid 0 = ""
     showid n = pack (show n)

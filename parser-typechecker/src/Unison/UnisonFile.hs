@@ -31,7 +31,6 @@ import qualified Unison.Util.List       as List
 import           Unison.Util.Relation   (Relation)
 import qualified Unison.Util.Relation   as Relation
 import           Unison.Var             (Var)
-import qualified Unison.Var             as Var
 import qualified Unison.Typechecker.TypeLookup as TL
 import Unison.Names3 (Names0)
 import qualified Unison.LabeledDependency as LD
@@ -54,9 +53,9 @@ watchesOfOtherKinds kind uf =
 allWatches :: UnisonFile v a -> [(v, AnnotatedTerm v a)]
 allWatches = join . Map.elems . watches
 
-type WatchKind = Var.WatchKind
-pattern RegularWatch = Var.RegularWatch
-pattern TestWatch = Var.TestWatch
+type WatchKind = String
+pattern RegularWatch = ""
+pattern TestWatch = "test"
 
 -- Converts a file to a single let rec with a body of `()`, for
 -- purposes of typechecking.

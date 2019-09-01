@@ -1852,7 +1852,7 @@ propagate errorPPE patch b = validatePatch patch >>= \case
     isType <- eval $ IsType ref
     if isTerm then do
       let
-        termInfo :: Reference -> Action' m v (v, (Reference, Term v Ann, Type v Ann))
+        termInfo :: Reference -> Action' m v (Reference, (Term v Ann, Type v Ann))
         termInfo termRef = do
           tpm <- eval $ LoadTypeOfTerm termRef
           tp  <- maybe (fail $ "Missing type for term " <> show termRef) pure tpm
@@ -1860,12 +1860,12 @@ propagate errorPPE patch b = validatePatch patch >>= \case
             Reference.DerivedId id -> do
               mtm <- eval $ LoadTerm id
               tm <- maybe (fail $ "Missing term with id " <> show id) pure mtm
-              pure (Var.typed (Var.RefNamed termRef), (termRef, tm, tp))
+              pure (termRef, (tm, tp))
             _ -> fail $ "Cannot unhashComponent for a builtin: " ++ show termRef
         unhash m =
-          let f (ref,_oldTm,oldTyp) (_ref,newTm) = (ref,newTm,oldTyp)
-              dropType (r,tm,_tp) = (r,tm)
-          in Map.intersectionWith f m (Term.unhashComponent (dropType <$> m))
+          let f (_oldTm,oldTyp) (v,newTm) = (v,newTm,oldTyp)
+              m' = Map.intersectionWith f m (Term.unhashComponent (fst <$> m))
+          in Map.fromList [ (v, (r, tm, tp)) | (r, (v, tm, tp)) <- Map.toList m' ]
       Just . unhash . Map.fromList <$> traverse termInfo (toList component)
     else if isType then pure Nothing
     else fail $ "Invalid reference: " <> show ref

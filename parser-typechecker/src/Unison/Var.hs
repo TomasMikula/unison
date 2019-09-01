@@ -10,20 +10,16 @@ import Data.Char (toLower, isLower)
 import qualified Data.Text as Text
 import qualified Unison.ABT as ABT
 import Unison.Util.Monoid (intercalateMap)
-import Unison.Reference (Reference)
 
 -- | A class for variables. Variables may have auxiliary information which
 -- may not form part of their identity according to `Eq` / `Ord`.
 class (Show v, ABT.Var v) => Var v where
-  typed :: Type -> v
+  named :: Text -> v
   name :: v -> Text
   freshenId :: Word64 -> v -> v
 
 freshIn :: ABT.Var v => Set v -> v -> v
 freshIn = ABT.freshIn
-
-named :: Var v => Text -> v
-named n = typed (User n)
 
 uncapitalize :: Var v => v -> v
 uncapitalize v = nameds $ go (nameStr v) where
@@ -48,13 +44,6 @@ inferOther = named "𝕩"
 
 unnamedTest :: Var v => Text -> v
 unnamedTest guid = named ("test." <> guid)
-
-data Type
-  -- User provided variables, these should generally be left alone
-  = User Text
-  -- Variables created in `makeSelfContained` for Evaluation
-  | RefNamed Reference
-  deriving (Eq,Ord,Show)
 
 reset :: Var v => v -> v
 reset v = freshenId 0 v

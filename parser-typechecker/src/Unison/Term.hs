@@ -839,7 +839,7 @@ unhashComponent m = let
   m' = Map.fromList . addVars usedVars . Map.toList $ m where
     addVars _ [] = []
     addVars usedVars ((r, t) : rts) =
-      let v = Var.freshIn usedVars (Var.typed (Var.RefNamed r))
+      let v = Var.freshIn usedVars (Var.named ("ℍ" <> Reference.toText r))
       in (r, (v, t)) : addVars (Set.insert v usedVars) rts
   unhash1 = ABT.rebuildUp' go where
     go e@(Ref' r) = case Map.lookup r m' of

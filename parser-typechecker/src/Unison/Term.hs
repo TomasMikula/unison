@@ -831,9 +831,13 @@ unhashComponent :: forall v a. Var v
                 => Map Reference (AnnotatedTerm v a)
                 -> Map Reference (v, AnnotatedTerm v a)
 unhashComponent m = let
+  usedVars = foldr Set.union Set.empty (Set.fromList . ABT.allVars <$> m)
   m' :: Map Reference (v, AnnotatedTerm v a)
-  m' = Map.fromList . addVars . Map.toList $ m where
-    addVars rts = [ (r, (Var.typed (Var.RefNamed r), t)) | (r, t) <- rts ]
+  m' = Map.fromList . addVars usedVars . Map.toList $ m where
+    addVars _ [] = []
+    addVars usedVars ((r, t) : rts) =
+      let v = Var.freshIn usedVars (Var.typed (Var.RefNamed r))
+      in (r, (v, t)) : addVars (Set.insert v usedVars) rts
   unhash1 = ABT.rebuildUp' go where
     go e@(Ref' r) = case Map.lookup r m' of
       Nothing -> e

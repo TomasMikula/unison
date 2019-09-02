@@ -830,17 +830,23 @@ etaNormalForm t = t
 
 -- This converts `Reference`s it finds that are in the input `Map`
 -- back to free variables
-unhashComponent :: Var v
-                => Map v (Reference, AnnotatedTerm v a)
-                -> Map v (Reference, AnnotatedTerm v a)
+unhashComponent :: forall v a. Var v
+                => Map Reference (AnnotatedTerm v a)
+                -> Map Reference (v, AnnotatedTerm v a)
 unhashComponent m = let
-  refToVar = Map.fromList [ (r, v) | (v, (r,_)) <- Map.toList m ]
+  usedVars = foldr Set.union Set.empty (Set.fromList . ABT.allVars <$> m)
+  m' :: Map Reference (v, AnnotatedTerm v a)
+  m' = Map.fromList . addVars usedVars . Map.toList $ m where
+    addVars _ [] = []
+    addVars usedVars ((r, t) : rts) =
+      let v = Var.freshIn usedVars (Var.typed (Var.RefNamed r))
+      in (r, (v, t)) : addVars (Set.insert v usedVars) rts
   unhash1 = ABT.rebuildUp' go where
-    go e@(Ref' r) = case Map.lookup r refToVar of
+    go e@(Ref' r) = case Map.lookup r m' of
       Nothing -> e
-      Just v -> var (ABT.annotation e) v
+      Just (v, _) -> var (ABT.annotation e) v
     go e = e
-  in Map.fromList [ (v, (r, unhash1 e)) | (v, (r,e)) <- Map.toList m ]
+  in fmap (\(v, e) -> (v, unhash1 e)) m'
 
 hashComponents
   :: Var v => Map v (AnnotatedTerm v a) -> Map v (Reference, AnnotatedTerm v a)

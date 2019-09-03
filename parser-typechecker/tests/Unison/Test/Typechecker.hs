@@ -10,7 +10,7 @@ import           Control.Monad          (void)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.Map               as Map
 import           Data.Sequence          (Seq)
-import           Data.Text              (unpack)
+import           Data.Text              (pack, unpack)
 import           Data.Text.IO           (readFile)
 import           EasyTest
 import           System.FilePath        (joinPath, splitPath, replaceExtension)
@@ -25,7 +25,7 @@ import qualified Unison.PrintError      as PrintError
 import           Unison.Result          (pattern Result, Result)
 import qualified Unison.Result          as Result
 import qualified Unison.Runtime.Rt1IO   as RT
-import           Unison.Symbol          (Symbol)
+import           Unison.Symbol          (Symbol, Symbol(..))
 import qualified Unison.Term            as Term
 import           Unison.Term            ( amap )
 import           Unison.Test.Common     (parseAndSynthesizeAsFile, parsingEnv)
@@ -72,7 +72,7 @@ test = do
           -- check that capture avoidance works in substTypeVar
           let v s = Var.nameds s :: Symbol
               tv s = Type.var() (v s)
-              v1 s = Var.freshenId 1 (v s)
+              v1 s = Symbol 1 (pack s)
               tm :: Term.Term Symbol
               tm = Term.ann() (Term.ann()
                                  (Term.nat() 42)

@@ -11,12 +11,14 @@ import qualified Data.Text as Text
 import qualified Unison.ABT as ABT
 import Unison.Util.Monoid (intercalateMap)
 
--- | A class for variables. Variables may have auxiliary information which
--- may not form part of their identity according to `Eq` / `Ord`.
+-- | A class for variables. Laws:
+--
+--   * `name (named n) == n`
+--   * `reset . freshIn vs . named == named`
 class (Show v, ABT.Var v) => Var v where
   named :: Text -> v
   name :: v -> Text
-  freshenId :: Word64 -> v -> v
+  reset :: v -> v
 
 freshIn :: ABT.Var v => Set v -> v -> v
 freshIn = ABT.freshIn
@@ -44,9 +46,6 @@ inferOther = named "𝕩"
 
 unnamedTest :: Var v => Text -> v
 unnamedTest guid = named ("test." <> guid)
-
-reset :: Var v => v -> v
-reset v = freshenId 0 v
 
 isQualified :: Var v => v -> Bool
 isQualified v = Text.any (== '.') (name v)

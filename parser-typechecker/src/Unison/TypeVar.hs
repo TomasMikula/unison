@@ -34,4 +34,4 @@ instance ABT.Var v => ABT.Var (TypeVar b v) where
 instance Var v => Var (TypeVar b v) where
   named n = Universal (Var.named n)
   name v = Var.name (underlying v)
-  freshenId id v = Var.freshenId id <$> v
+  reset v = Var.reset <$> v

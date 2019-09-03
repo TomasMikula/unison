@@ -105,7 +105,7 @@ instance (Ord loc, Var v) => Eq (Element v loc) where
   Marker v == Marker v2          = v == v2
   _ == _ = False
 
-data Env v loc = Env { freshId :: Word64, ctx :: Context v loc }
+data Env v loc = Env { spentVars :: Set v, ctx :: Context v loc }
 
 type DataDeclarations v loc = Map Reference (DataDeclaration' v loc)
 type EffectDeclarations v loc = Map Reference (EffectDeclaration' v loc)
@@ -439,18 +439,15 @@ universals = universalVars . info
 existentials :: Ord v => Context v loc -> Set v
 existentials = existentialVars . info
 
-freshenVar :: Var v => v -> M v0 loc v
+freshenVar :: Var v => v -> M v loc v
 freshenVar v = modEnv'
   (\e ->
-    let id = freshId e in (Var.freshenId id v, e { freshId = freshId e + 1 })
+    let v' = Var.freshIn (spentVars e) v
+    in (v', e { spentVars = Set.insert v' (spentVars e) })
   )
 
 freshenTypeVar :: Var v => TypeVar v loc -> M v loc v
-freshenTypeVar v = modEnv'
-  (\e ->
-    let id = freshId e
-    in  (Var.freshenId id (TypeVar.underlying v), e { freshId = id + 1 })
-  )
+freshenTypeVar v = freshenVar (TypeVar.underlying v)
 
 isClosed :: Var v => Term v loc -> M v loc Bool
 isClosed e = Set.null <$> freeVars e
@@ -1591,7 +1588,7 @@ run
 run ambient datas effects m =
   fmap fst
     . runM m
-    $ MEnv (Env 1 mempty) ambient datas effects []
+    $ MEnv (Env Set.empty mempty) ambient datas effects []
 
 synthesizeClosed' :: (Var v, Ord loc)
                   => [Type v loc]

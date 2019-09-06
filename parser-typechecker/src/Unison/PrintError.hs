@@ -38,7 +38,7 @@ import qualified Unison.Term                  as Term
 import qualified Unison.Type                  as Type
 import qualified Unison.Typechecker.Context   as C
 import           Unison.Typechecker.TypeError
-import qualified Unison.TypeVar               as TypeVar
+import qualified Unison.Typechecker.TypeVar   as TypeVar
 import qualified Unison.UnisonFile            as UF
 import           Unison.Util.AnnotatedText    (AnnotatedText)
 import qualified Unison.Util.AnnotatedText    as AT
@@ -426,7 +426,7 @@ renderTypeError e env src = case e of
            , style ErrorSite (renderType' env i)
            , ".\n\n"
            , case o of
-             Type.Existential' _ _ ->
+             Type.Var' (TypeVar.Existential _ _) ->
                "It can be replaced with a value of any type.\n"
              _ ->
                "A well-typed replacement must conform to: "
@@ -440,7 +440,7 @@ renderTypeError e env src = case e of
     , annotatedAsErrorSite src termSite
     , "\n"
     , case expectedType of
-      Type.Existential' _ _ ->
+      Type.Var' (TypeVar.Existential _ _) ->
         "To complete the block, add an expression after this binding.\n\n"
       _ ->
         "Based on the context, I'm expecting an expression of type "
@@ -463,7 +463,7 @@ renderTypeError e env src = case e of
           , "\n\n"
           , annotatedAsErrorSite src termSite
           , case expectedType of
-            Type.Existential' _ _ -> "\nThere are no constraints on its type."
+            Type.Var' (TypeVar.Existential _ _) -> "\nThere are no constraints on its type."
             _ ->
               "\nWhatever it is, it has a type that conforms to "
                 <> style Type1 (renderType' env expectedType)
@@ -716,7 +716,7 @@ renderContext env ctx@(C.Context es) = "  Γ\n    "
 
 renderTerm :: (IsString s, Var v) => Env -> C.Term v loc -> s
 renderTerm env e =
-  let s = Color.toPlain $ TermPrinter.pretty' (Just 80) env (Term.unTypeVar e)
+  let s = Color.toPlain $ TermPrinter.pretty' (Just 80) env (TypeVar.lowerTerm e)
   in if length s > Settings.renderTermMaxLength
      then fromString (take Settings.renderTermMaxLength s <> "...")
      else fromString s

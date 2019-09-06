@@ -1,9 +1,12 @@
 {-# Language DeriveFunctor #-}
 
-module Unison.TypeVar where
+module Unison.Typechecker.TypeVar where
 
 import qualified Data.Set as Set
 import qualified Unison.ABT as ABT
+import qualified Unison.Term as Term
+import           Unison.Term (AnnotatedTerm, AnnotatedTerm')
+import           Unison.Type (Type)
 import           Unison.Var (Var)
 import qualified Unison.Var as Var
 
@@ -35,3 +38,15 @@ instance Var v => Var (TypeVar b v) where
   named n = Universal (Var.named n)
   name v = Var.name (underlying v)
   reset v = Var.reset <$> v
+
+liftType :: Ord v => Type v a -> Type (TypeVar b v) a
+liftType = ABT.vmap Universal
+
+lowerType :: Ord v => Type (TypeVar b v) a -> Type v a
+lowerType = ABT.vmap underlying
+
+liftTerm :: Ord v => AnnotatedTerm v a -> AnnotatedTerm' (TypeVar b v) v a
+liftTerm = Term.vtmap Universal
+
+lowerTerm :: Ord v => AnnotatedTerm' (TypeVar b v) v a -> AnnotatedTerm v a
+lowerTerm = Term.vtmap underlying

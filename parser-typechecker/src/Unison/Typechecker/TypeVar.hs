@@ -1,16 +1,17 @@
 {-# Language DeriveFunctor #-}
+{-# Language DeriveTraversable #-}
 
 module Unison.Typechecker.TypeVar where
 
 import qualified Data.Set as Set
 import qualified Unison.ABT as ABT
 import qualified Unison.Term as Term
-import           Unison.Term (AnnotatedTerm, AnnotatedTerm')
+import           Unison.Term (AnnotatedTerm)
 import           Unison.Type (Type)
 import           Unison.Var (Var)
 import qualified Unison.Var as Var
 
-data TypeVar b v = Universal v | Existential b v deriving (Functor)
+data TypeVar b v = Universal v | Existential b v deriving (Functor, Foldable, Traversable)
 
 instance Eq v => Eq (TypeVar b v) where
   Universal v == Universal v2 = v == v2
@@ -45,8 +46,8 @@ liftType = ABT.vmap Universal
 lowerType :: Ord v => Type (TypeVar b v) a -> Type v a
 lowerType = ABT.vmap underlying
 
-liftTerm :: Ord v => AnnotatedTerm v a -> AnnotatedTerm' (TypeVar b v) v a
-liftTerm = Term.vtmap Universal
+liftTerm :: Ord v => AnnotatedTerm v a -> AnnotatedTerm (TypeVar b v) a
+liftTerm = Term.vmap Universal
 
-lowerTerm :: Ord v => AnnotatedTerm' (TypeVar b v) v a -> AnnotatedTerm v a
-lowerTerm = Term.vtmap underlying
+lowerTerm :: Ord v => AnnotatedTerm (TypeVar b v) a -> AnnotatedTerm v a
+lowerTerm = Term.vmap underlying

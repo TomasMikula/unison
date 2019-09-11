@@ -416,7 +416,7 @@ a + b = ...
 
 -}
 prettyBinding ::
-  Var v => PrettyPrintEnv -> HQ.HashQualified -> AnnotatedTerm2 v at ap v a -> Pretty SyntaxText
+  Var v => PrettyPrintEnv -> HQ.HashQualified -> AnnotatedTerm2 at ap v a -> Pretty SyntaxText
 prettyBinding n hq t = prettyBinding0 n (ac (-1) Block Map.empty) hq t
 
 prettyBinding' ::
@@ -424,7 +424,7 @@ prettyBinding' ::
 prettyBinding' width n v t = PP.render width $ PP.syntaxToColor $ prettyBinding n v t
 
 prettyBinding0 ::
-  Var v => PrettyPrintEnv -> AmbientContext -> HQ.HashQualified -> AnnotatedTerm2 v at ap v a -> Pretty SyntaxText
+  Var v => PrettyPrintEnv -> AmbientContext -> HQ.HashQualified -> AnnotatedTerm2 at ap v a -> Pretty SyntaxText
 prettyBinding0 env a@(AmbientContext { imports = im }) v term = go (symbolic && isBinary term) term where
   go infix' = \case
     Ann' tm tp -> PP.lines [
@@ -632,7 +632,7 @@ instance Semigroup PrintAnnotation where
 instance Monoid PrintAnnotation where
   mempty = PrintAnnotation { usages = Map.empty }
 
-suffixCounterTerm :: Var v => PrettyPrintEnv -> AnnotatedTerm2 v at ap v a -> PrintAnnotation
+suffixCounterTerm :: Var v => PrettyPrintEnv -> AnnotatedTerm2 at ap v a -> PrintAnnotation
 suffixCounterTerm n = \case
     Var' v -> countHQ $ HQ.unsafeFromVar v
     Ref' r -> countHQ $ PrettyPrintEnv.termName n (Referent.Ref r)
@@ -652,10 +652,10 @@ suffixCounterType n = \case
     Type.Ref' r -> countHQ $ PrettyPrintEnv.typeName n r
     _ -> mempty
 
-printAnnotate :: (Var v, Ord v) => PrettyPrintEnv -> AnnotatedTerm2 v at ap v a -> AnnotatedTerm3 v PrintAnnotation
+printAnnotate :: (Var v, Ord v) => PrettyPrintEnv -> AnnotatedTerm2 at ap v a -> AnnotatedTerm3 v PrintAnnotation
 printAnnotate n tm = fmap snd (go (reannotateUp (suffixCounterTerm n) tm)) where
-  go :: Ord v => AnnotatedTerm2 v at ap v b -> AnnotatedTerm2 v () () v b
-  go = extraMap' id (const ()) (const ())
+  go :: Ord v => AnnotatedTerm2 at ap v b -> AnnotatedTerm2 () () v b
+  go = extraMap' (const ()) (const ())
 
 countTypeUsages :: (Var v, Ord v) => PrettyPrintEnv -> Type v a -> PrintAnnotation
 countTypeUsages n t = snd $ annotation $ reannotateUp (suffixCounterType n) t
@@ -833,7 +833,7 @@ allInSubBlock tm p s i = let found = concat $ ABT.find finder tm
 
 -- Return any blockterms at or immediately under this term.  Has to match the places in the
 -- syntax that get a call to `calcImports` in `pretty0`.
-immediateChildBlockTerms :: (Var vt, Var v) => AnnotatedTerm2 vt at ap v a -> [AnnotatedTerm2 vt at ap v a]
+immediateChildBlockTerms :: Var v => AnnotatedTerm2 at ap v a -> [AnnotatedTerm2 at ap v a]
 immediateChildBlockTerms = \case
     Handle' _ body -> [body]
     If' _ t f -> [t, f]

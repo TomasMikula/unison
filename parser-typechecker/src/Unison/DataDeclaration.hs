@@ -445,9 +445,9 @@ unitTerm :: Var v => a -> AnnotatedTerm v a
 unitTerm ann = Term.constructor ann unitRef 0
 
 tupleConsTerm :: (Ord v, Semigroup a)
-              => AnnotatedTerm2 vt at ap v a
-              -> AnnotatedTerm2 vt at ap v a
-              -> AnnotatedTerm2 vt at ap v a
+              => AnnotatedTerm2 at ap v a
+              -> AnnotatedTerm2 at ap v a
+              -> AnnotatedTerm2 at ap v a
 tupleConsTerm hd tl =
   Term.apps' (Term.constructor (ABT.annotation hd) pairRef 0) [hd, tl]
 
@@ -463,8 +463,8 @@ delayTerm :: Var v => a -> AnnotatedTerm v a -> AnnotatedTerm v a
 delayTerm a = Term.lam a $ Var.named "()"
 
 unTupleTerm
-  :: Term.AnnotatedTerm2 vt at ap v a
-  -> Maybe [Term.AnnotatedTerm2 vt at ap v a]
+  :: AnnotatedTerm2 at ap v a
+  -> Maybe [AnnotatedTerm2 at ap v a]
 unTupleTerm t = case t of
   Term.Apps' (Term.Constructor' PairRef 0) [fst, snd] ->
     (fst :) <$> unTupleTerm snd

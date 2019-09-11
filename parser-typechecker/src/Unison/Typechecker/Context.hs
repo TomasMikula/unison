@@ -50,7 +50,8 @@ import           Control.Monad.State            ( get
                                                 , runStateT
                                                 )
 import           Control.Monad.Writer           ( MonadWriter(..) )
-import           Data.Bifunctor                 ( first
+import           Data.Bifunctor                 ( bimap
+                                                , first
                                                 , second
                                                 )
 import qualified Data.Foldable                 as Foldable
@@ -69,7 +70,7 @@ import           Unison.PatternP                ( Pattern )
 import qualified Unison.PatternP               as Pattern
 import           Unison.Reference               ( Reference )
 import           Unison.Referent                ( Referent )
-import           Unison.Term                    ( AnnotatedTerm' )
+import           Unison.Term                    ( AnnotatedTerm )
 import qualified Unison.Term                   as Term
 import qualified Unison.Type                   as Type
 import           Unison.Typechecker.Components  ( minimize' )
@@ -81,7 +82,7 @@ import qualified Unison.TypePrinter            as TP
 
 type TypeVar v loc = TypeVar.TypeVar (B.Blank loc) v
 type Type v loc = Type.Type (TypeVar v loc) loc
-type Term v loc = AnnotatedTerm' (TypeVar v loc) v loc
+type Term v loc = AnnotatedTerm (TypeVar v loc) loc
 type Monotype v loc = Type.Monotype (TypeVar v loc) loc
 type RedundantTypeAnnotation = Bool
 
@@ -191,6 +192,7 @@ data CompilerBug v loc
   | UnannotatedReference Reference
   | MalformedPattern (Pattern loc)
   | UnknownTermReference Reference
+  | UnexpectedExistential (B.Blank loc) v
   deriving Show
 
 data PathElement v loc
@@ -455,16 +457,29 @@ freshenVar v = modEnv'
     in (v', e { spentVars = Set.insert v' (spentVars e) })
   )
 
+freshenUnderlying :: Var v => TypeVar v loc -> M v loc (TypeVar v loc)
+freshenUnderlying v = traverse freshenVar v
+
 freshenTypeVar :: Var v => TypeVar v loc -> M v loc v
 freshenTypeVar v = freshenVar (TypeVar.underlying v)
 
-isClosed :: Var v => Term v loc -> M v loc Bool
-isClosed e = Set.null <$> freeVars e
+unUniversal :: TypeVar v loc -> M v loc v
+unUniversal (TypeVar.Universal v) = pure v
+unUniversal (TypeVar.Existential loc v) = failWith $ CompilerBug (UnexpectedExistential loc v)
 
-freeVars :: Var v => Term v loc -> M v loc (Set v)
-freeVars e = do
+freshenUniversal :: Var v => TypeVar v loc -> M v loc v
+freshenUniversal v = do
+  v <- unUniversal v
+  freshenVar v
+
+isClosed :: Var v => Term v loc -> M v loc Bool
+isClosed e = Set.null <$> freeTermVars e
+
+freeTermVars :: Var v => Term v loc -> M v loc (Set v)
+freeTermVars e = do
+  vs <- Set.fromList <$> traverse unUniversal (Set.toList $ Term.freeVars e)
   ctx <- getContext
-  pure $ ABT.freeVars e `Set.difference` previouslyTypecheckedVars (info ctx)
+  pure $ vs `Set.difference` previouslyTypecheckedVars (info ctx)
 
 -- | Check that the context is well formed, see Figure 7 of paper
 -- Since contexts are 'monotonic', we can compute an cache this efficiently
@@ -728,23 +743,25 @@ generalizeExistentials' t =
 
 noteTopLevelType
   :: (Ord loc, Var v)
-  => ABT.Subst f v a
+  => ABT.Subst f (TypeVar v loc) a
   -> Term v loc
   -> Type v loc
   -> M v loc ()
-noteTopLevelType e binding typ = case binding of
-  Term.Ann' strippedBinding _ -> do
-    inferred <- (Just <$> synthesize strippedBinding) `orElse` pure Nothing
-    case inferred of
-      Nothing -> btw $ TopLevelComponent
-        [(Var.reset (ABT.variable e), generalizeAndUnTypeVar typ, False)]
-      Just inferred -> do
-        redundant <- isRedundant typ inferred
-        btw $ TopLevelComponent
-          [(Var.reset (ABT.variable e), generalizeAndUnTypeVar typ, redundant)]
-  -- The signature didn't exist, so was definitely redundant
-  _ -> btw $ TopLevelComponent
-    [(Var.reset (ABT.variable e), generalizeAndUnTypeVar typ, True)]
+noteTopLevelType e binding typ = do
+  v <- unUniversal . Var.reset . ABT.variable $ e
+  case binding of
+    Term.Ann' strippedBinding _ -> do
+      inferred <- (Just <$> synthesize strippedBinding) `orElse` pure Nothing
+      case inferred of
+        Nothing -> btw $ TopLevelComponent
+          [(v, generalizeAndUnTypeVar typ, False)]
+        Just inferred -> do
+          redundant <- isRedundant typ inferred
+          btw $ TopLevelComponent
+            [(v, generalizeAndUnTypeVar typ, redundant)]
+    -- The signature didn't exist, so was definitely redundant
+    _ -> btw $ TopLevelComponent
+      [(v, generalizeAndUnTypeVar typ, True)]
 
 -- | Synthesize the type of the given term, updating the context in the process.
 -- | Figure 11 from the paper
@@ -752,7 +769,9 @@ synthesize :: forall v loc . (Var v, Ord loc) => Term v loc -> M v loc (Type v l
 synthesize e | debugEnabled && traceShow ("synthesize"::String, e) False = undefined
 synthesize e = scope (InSynthesize e) $
   case minimize' e of
-    Left es -> failWith (DuplicateDefinitions es)
+    Left es ->
+      let es' = first TypeVar.underlying <$> es
+      in failWith (DuplicateDefinitions es')
     Right e -> do
       Type.Effect'' es t <- go e
       abilityCheck es
@@ -760,7 +779,7 @@ synthesize e = scope (InSynthesize e) $
   where
   l = loc e
   go :: (Var v, Ord loc) => Term v loc -> M v loc (Type v loc)
-  go (Term.Var' v) = getContext >>= \ctx -> case lookupAnn ctx v of -- Var
+  go (Term.Var' (TypeVar.Universal v)) = getContext >>= \ctx -> case lookupAnn ctx v of -- Var
     Nothing -> compilerCrash $ UndeclaredTermVariable v ctx
     Just t -> pure t
   go (Term.Blank' blank) = do
@@ -809,16 +828,17 @@ synthesize e = scope (InSynthesize e) $
     tbinding <-
       if isClosed then pure $ generalizeExistentials ctx2 t
       else applyM . apply ctx2 $ t
-    v' <- ABT.freshen e freshenVar
-    appendContext (context [Ann v' tbinding])
+    v <- ABT.freshen e freshenUniversal
+    let v' = TypeVar.Universal v
+    appendContext (context [Ann v tbinding])
     t <- applyM =<< synthesize (ABT.bindInheritAnnotation e (Term.var() v'))
     when top $ noteTopLevelType e binding tbinding
     -- doRetract $ Ann v' tbinding
     pure t
   go (Term.Lam' body) = do -- ->I=> (Full Damas Milner rule)
     -- arya: are there more meaningful locations we could put into and pull out of the abschain?)
-    [arg, i, e, o] <- sequence [ ABT.freshen body freshenVar
-                               , freshenVar (ABT.variable body)
+    [arg, i, e, o] <- sequence [ ABT.freshen body freshenUniversal
+                               , freshenUniversal (ABT.variable body)
                                , freshenVar Var.inferAbility
                                , freshenVar Var.inferOutput ]
     let it = existential' l B.Blank i
@@ -826,7 +846,7 @@ synthesize e = scope (InSynthesize e) $
         et = existential' l B.Blank e
     appendContext $
       context [existential i, existential e, existential o, Ann arg it]
-    body' <- pure $ ABT.bindInheritAnnotation body (Term.var() arg)
+    body' <- pure $ ABT.bindInheritAnnotation body (Term.var() $ TypeVar.Universal arg)
     if Term.isLam body' then withEffects0 [] $ check body' ot
     else                     withEffects0 [et] $ check body' ot
     ctx <- getContext
@@ -898,9 +918,11 @@ checkCase scrutineeType outputType (Term.MatchCase pat guard rhs) = do
                   _ -> ([], t)
         (rhsvs, rhsbod) = peel rhs
         mayGuard = snd . peel <$> guard
-    (substs, remains) <- runStateT (checkPattern scrutineeType pat) rhsvs
+    rhsvs' <- traverse unUniversal rhsvs
+    (substs, remains) <- runStateT (checkPattern scrutineeType pat) rhsvs'
+    let substs' = [ (TypeVar.Universal v, TypeVar.Universal v') | (v, v') <- substs ]
     unless (null remains) $ compilerCrash (MalformedPattern pat)
-    let subst = ABT.substsInheritAnnotation (second (Term.var ()) <$> substs)
+    let subst = ABT.substsInheritAnnotation (second (Term.var ()) <$> substs')
         rhs' = subst rhsbod
         guard' = subst <$> mayGuard
     for_ guard' $ \g -> scope InMatchGuard $ check g (Type.boolean (loc g))
@@ -1084,9 +1106,9 @@ resetContextAfter x a = do
 -- their type. Also returns the freshened version of `body`.
 -- See usage in `synthesize` and `check` for `LetRec'` case.
 annotateLetRecBindings
-  :: (Var v, Ord loc)
+  :: forall v loc. (Var v, Ord loc)
   => Term.IsTop
-  -> ((v -> M v loc v) -> M v loc ([(v, Term v loc)], Term v loc))
+  -> ((TypeVar v loc -> M v loc (TypeVar v loc)) -> M v loc ([(TypeVar v loc, Term v loc)], Term v loc))
   -> M v loc (Term v loc)
 annotateLetRecBindings isTop letrec =
   -- If this is a top-level letrec, then emit a TopLevelComponent note,
@@ -1114,11 +1136,14 @@ annotateLetRecBindings isTop letrec =
   -- If this isn't a top-level letrec, then we don't have to do anything special
   else fst <$> annotateLetRecBindings' True
  where
+  annotateLetRecBindings' :: Bool -> M v loc (Term v loc, [(v, Type v loc)])
   annotateLetRecBindings' useUserAnnotations = do
-    (bindings, body) <- letrec freshenVar
+    (bindings', body) <- letrec freshenUnderlying
+    bindings <- traverse (\(v,t) -> (,t) <$> unUniversal v) bindings'
     let vs = map fst bindings
     ((bindings, bindingTypes), ctx2) <- markThenRetract Var.inferOther $ do
-      let f (v, binding) = case binding of
+      let f :: (v, Term v loc) -> M v loc (Term v loc, Type v loc)
+          f (v, binding) = case binding of
             -- If user has provided an annotation, we use that
             Term.Ann' e t | useUserAnnotations -> do
               -- Arrows in `t` with no ability lists get an attached fresh
@@ -1156,21 +1181,25 @@ annotateLetRecBindings isTop letrec =
     appendContext . context $ annotations
     pure (body, vs `zip` bindingTypesGeneralized)
 
+partitionM :: Applicative m => (a -> m Bool) -> [a] -> m ([a], [a])
+partitionM f as =
+  bimap (map fst) (map fst) . partition snd <$> traverse (\a -> (a,) <$> f a) as
+
 ensureGuardedCycle :: Var v => [(v, Term v loc)] -> M v loc ()
-ensureGuardedCycle bindings = let
+ensureGuardedCycle bindings = do
   -- We make sure that nonLambdas can depend only on lambdas, not on each other
-  nonLambdas = Set.fromList [ v | (v, b) <- bindings, Term.arity b == 0 ]
-  (notok, ok) = partition f bindings
-  f (v, b) =
-    if Set.member v nonLambdas then
-      not $ Set.null (ABT.freeVars b `Set.intersection` nonLambdas)
-    else False
-  in if length ok == length bindings then pure ()
-     else failWith $ UnguardedLetRecCycle (fst <$> notok) bindings
+  let nonLambdas = Set.fromList [ v | (v, b) <- bindings, Term.arity b == 0 ]
+      isNotOk (v, b) =
+        if Set.member v nonLambdas then
+          not . Set.null . (`Set.intersection` nonLambdas) <$> freeTermVars b
+        else pure False
+  (notok, ok) <- partitionM isNotOk bindings
+  if length ok == length bindings then pure ()
+  else failWith $ UnguardedLetRecCycle (fst <$> notok) bindings
 
 existentialFunctionTypeFor :: Var v => Term v loc -> M v loc (Type v loc)
 existentialFunctionTypeFor lam@(Term.LamNamed' v body) = do
-  v <- extendExistential v
+  v <- extendExistential =<< unUniversal v
   e <- extendExistential Var.inferAbility
   o <- existentialFunctionTypeFor body
   pure $ Type.arrow (loc lam)
@@ -1238,7 +1267,9 @@ check e0 t0 = scope (InCheck e0 t0) $ do
   let Type.Effect'' es t = t0
   let e                  = minimize' e0
   case e of
-    Left e -> failWith $ DuplicateDefinitions e
+    Left e ->
+     let e' = fmap (first TypeVar.underlying) e
+     in failWith $ DuplicateDefinitions e'
     Right e ->
       if wellformedType ctx t0
         then case t of
@@ -1254,18 +1285,19 @@ check e0 t0 = scope (InCheck e0 t0) $ do
       x <- extendUniversal v
       check e (ABT.bindInheritAnnotation body (universal' () x))
   go (Term.Lam' body) (Type.Arrow' i o) = do -- =>I
-    x <- ABT.freshen body freshenVar
+    x <- ABT.freshen body freshenUniversal
+    let x' = TypeVar.Universal x
     markThenRetract0 x $ do
       modifyContext' (extend (Ann x i))
       let Type.Effect'' es ot = o
-      body' <- pure $ ABT.bindInheritAnnotation body (Term.var() x)
+      body' <- pure $ ABT.bindInheritAnnotation body (Term.var() x')
       withEffects0 es $ check body' ot
   go (Term.Let1' binding e) t = do
-    v        <- ABT.freshen e freshenVar
+    v        <- ABT.freshen e freshenUniversal
     tbinding <- synthesize binding
     markThenRetract0 v $ do
       modifyContext' (extend (Ann v tbinding))
-      check (ABT.bindInheritAnnotation e (Term.var () v)) t
+      check (ABT.bindInheritAnnotation e (Term.var () $ TypeVar.Universal v)) t
   go (Term.LetRecNamed' [] e) t = check e t
   go (Term.LetRecTop' isTop letrec) t =
     markThenRetract0 (Var.named "let-rec-marker") $ do
@@ -1574,7 +1606,7 @@ synthesizeClosed abilities lookupType term0 = let
 
 verifyClosedTerm :: forall v loc . Ord v => Term v loc -> M v loc ()
 verifyClosedTerm t = do
-  ok1 <- verifyClosed t id
+  ok1 <- verifyClosed t TypeVar.underlying
   let freeTypeVars = Map.toList $ Term.freeTypeVarAnnotations t
       reportError (v, locs) = for_ locs $ \loc ->
         recover () (failWith (UnknownSymbol loc (TypeVar.underlying v)))
